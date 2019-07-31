@@ -1,0 +1,15 @@
+*output_stats*
+*~
+*.pyc
+*.ipynb_checkpoints*
+
+*.log
+*.out
+*.synctex.gz
+
+*dask-worker-space/*
+*mydask.png*
+*.dat
+*.pkl
+temp/*
+desi/*
