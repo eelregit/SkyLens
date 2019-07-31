@@ -1,11 +1,5 @@
 import sys
-sys.path.insert(0,'../')
 from cov_3X2 import *
-
-# only for python3
-import importlib
-reload=importlib.reload
-
 
 
 class PCA_shear():
