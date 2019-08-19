@@ -38,11 +38,8 @@ class Covariance_utils():
         self.gaussian_cov_norm_2D=np.outer(np.sqrt(self.gaussian_cov_norm),np.sqrt(self.gaussian_cov_norm))
 
     def set_window_params(self):
-        self.Om_W=4*np.pi  #multiply f_sky later.
+        self.Om_W=4*np.pi*self.f_sky
         self.window_func()
-
-        self.Win/=self.Om_W
-        self.Win0/=self.Om_W
 
     def window_func(self):
         if self.window_file is not None:
@@ -53,6 +50,7 @@ class Covariance_utils():
             self.Win0=win_i(self.window_l) #this will be useful for SSV
             return
 
+        #same as eq. 5.4 of https://arxiv.org/pdf/1711.07467.pdf
         if self.window_l is None:
             self.window_l=np.arange(100)
 
@@ -61,14 +59,23 @@ class Covariance_utils():
         l_th=l*theta_win
         Win0=2*jn(1,l_th)/l_th
         Win0=np.nan_to_num(Win0)
-
+        Win0=Win0**2 #p-Cl equivalent
+#         Win0*=self.f_sky  #FIXME???? Missing 4pi? Using Om_w doesnot match healpix calculation.
+        
         win_i=interp1d(l,Win0,bounds_error=False,fill_value=0)
         self.Win=win_i(self.window_l) #this will be useful for SSV
         self.Win0=win_i(self.l)
         return 0
 
-    def sigma_win_calc(self,cls_lin):
-        self.sigma_win=np.dot(self.Win**2*np.gradient(self.window_l)*self.window_l,cls_lin.T)
+    def sigma_win_calc(self,cls_lin,Win_cl=None,Om_w12=None,Om_w34=None):
+        if Win_cl is None:
+            Win_cl=self.Win
+            Om_w12=self.Om_W
+            Om_w34=self.Om_W
+            
+        sigma_win=np.dot(Win_cl*np.gradient(self.window_l)*(2*self.window_l+1),cls_lin.T)
+        sigma_win/=Om_w12*Om_w34
+        return sigma_win
 
     def corr_matrix(self,cov=[]):
         diag=np.diag(cov)
@@ -101,6 +108,36 @@ class Covariance_utils():
 
         G1423=np.outer(G1423,(cls[(tracers[1],tracers[2])][(z_indx[1], z_indx[2])
                                                           ]*self.sample_variance_f
+                    + SN2[23]))
+
+        return G1324,G1423
+    
+    def gaussian_cov_window_Bmode(self,cls,SN,tracers,z_indx,do_xi): #for shear B-mode
+        SN2=self.get_SN(SN,tracers,z_indx)
+        sv_f={13:1,24:1,14:1,23:1}
+        if tracers[0]=='shear' and tracers[2]=='shear':
+            sv_f[13]=0
+        if tracers[1]=='shear' and tracers[3]=='shear':
+            sv_f[24]=0
+        if tracers[0]=='shear' and tracers[3]=='shear':
+            sv_f[14]=0
+        if tracers[1]=='shear' and tracers[2]=='shear':
+            sv_f[23]=0
+            
+        G1324= ( cls[(tracers[0],tracers[2])] [(z_indx[0], z_indx[2]) ]*self.sample_variance_f*sv_f[13]
+             + SN2[13]
+                )#/self.gaussian_cov_norm
+             #get returns None if key doesnot exist. or 0 adds 0 is SN is none
+
+        G1324=np.outer(G1324,( cls[(tracers[1],tracers[3])][(z_indx[1], z_indx[3]) ]*self.sample_variance_f*sv_f[24]
+              + SN2[24]))
+
+        G1423= ( cls[(tracers[0],tracers[3])][(z_indx[0], z_indx[3]) ]*self.sample_variance_f*sv_f[14]
+              + SN2[14]
+              )#/self.gaussian_cov_norm
+
+        G1423=np.outer(G1423,(cls[(tracers[1],tracers[2])][(z_indx[1], z_indx[2])
+                                                          ]*self.sample_variance_f*sv_f[23]
                     + SN2[23]))
 
         return G1324,G1423
